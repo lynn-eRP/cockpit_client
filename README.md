@@ -21,7 +21,7 @@ Cockpit.init({
       ]
     },
     "api": { // Collections
-      "myCollection" :  : {
+      "myCollection" :  {
         "collection": "users",
         "sort": {"login": 1},
         "fields": [
@@ -33,10 +33,10 @@ Cockpit.init({
           "_create_by"
         ]
       },
-      "myForm" :  : {
+      "myForm" :  {
         "form": "sendmail"
       },
-      "mySingleton" :  : {
+      "mySingleton" : {
         "singleton": "configurations"
       },
       "slides" : {
@@ -54,12 +54,14 @@ Cockpit.init({
         ],
         "map": { // change value of a property or set new property in result object
           // you can build string from a template
-          "image": "{{SERVER}}{{image.path}}"
+          "image": "{{SERVER}}{{image.path}}",
           // or map a property's value to another
           "body" : "{{description}}"
         },
-    },
-  });
+      },
+    }
+  },
+);
 ```
 
 ## How Use
