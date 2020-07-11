@@ -1,15 +1,15 @@
 name: cockpit_client
-description: Cockpit REST API CLIENT
+description: Consume Cockpit PHP API within Flutter CLIENT, access to your collection, singleton or save your forms.
 version: 0.0.1
-author:
-homepage:
+# author: Ulrich Badinga
+homepage: https://github.com/lynn-eRP/cockpit_client
 
 environment:
   sdk: ">=2.7.0 <3.0.0"
 
 dependencies:
   http: ^0.12.1
-  liquid_engine: 0.1.2
+  liquid_engine: ^0.1.2
   flutter:
     sdk: flutter
 
