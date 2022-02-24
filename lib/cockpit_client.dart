@@ -44,8 +44,8 @@ Future<List<T>> Function({
   bool? isSingleton,
   bool? isForm,
   bool? isApi,
-  bool? notConfigured,
   Key? key,
+  bool returnText = false
 }) {
   return ({
     page,
@@ -182,6 +182,7 @@ Future<List<T>> Function({
         url += (isSingleton! ? 'singletons' : 'collections') + '/get/';
     }
     url += collectionName;
+    url = "$url".replaceAll(r"/+", "/");
     url += "?token=${api["token"] ?? _config["token"]}";
     T map(Map<String, dynamic>? el) {
       if (el != null) {
@@ -206,7 +207,7 @@ Future<List<T>> Function({
     var body = isSingleton!
         ? null
         : (save != null)
-            ? jsonEncode({"${isForm! ? 'form' : 'data'}": save})
+            ? jsonEncode(isApi! ? save : {"${isForm! ? 'form' : 'data'}": save})
             : jsonEncode(params);
     // print("BODY $body");
     response() => _fetch[_key]!.post(
@@ -224,6 +225,8 @@ Future<List<T>> Function({
         // print("cacheUrl $cacheUrl");
         if (!_cache.containsKey(cacheUrl)) {
           resBody = (await response()).body;
+          if(returnText)
+            return [resBody] as List<T>;
           res = await compute(_decodeString, resBody);
           _cache[cacheUrl] = resBody;
           _cacheTTL[cacheUrl] = Timer(cache, () {
@@ -235,6 +238,8 @@ Future<List<T>> Function({
           resBody = _cache[cacheUrl]!;
       } else {
         resBody = (await response()).body;
+        if(returnText)
+            return [resBody] as List<T>;
         res = await compute(_decodeString, resBody);
       }
       // print("resBody $resBody");
@@ -291,7 +296,7 @@ class Cockpit {
     server = server.replace(path: "", query: "");
     Map<String, dynamic> config = {
       "api" : api,
-      "server" : server.toString(),
+      "server" : server.toString().replaceFirst(RegExp(r"\?$"), ""),
       "token" : token,
       "baseUrl" : baseUrl,
       "filter" : defaultFilter
@@ -387,8 +392,148 @@ class Cockpit {
     ));
     return (ret.isEmpty ? null : ret)?.first;
   }
+  Future<Map<String, dynamic>?> schema() async {
+    var ret = await _getOrSetData<Map<String, dynamic>>("!/collections/collection/${this.collection}")();
+    return ret.isNotEmpty ? ret.first : null;
+  }
+  Future<Map<String, dynamic>?> updateSchema(List<Map<String,dynamic>> fields) async {
+    var ret = await _getOrSetData<Map<String, dynamic>>("!/collections/updateCollection/${this.collection}")(
+      save: {
+        "data" : {
+          "fields" : fields
+        }
+      }
+    );
+    return ret.isNotEmpty ? ret.first : null;
+  }
 
   void cancelLastRequest() {
     _closeFetch(key ?? Key(collection));
   }
+  // Cockpit admin urls
+  static Future<Map<String, dynamic>?> authUser(
+    String user,
+    String password
+  ) async {
+    var ret = await _getOrSetData<Map<String, dynamic>>("!/cockpit/authUser")(
+      save : {
+        "user": user,
+        "password": password
+      });
+    return ret.isNotEmpty ? ret.first : null;
+  }
+  static Future<Map<String, dynamic>?> saveUser(
+    Map<String, dynamic>? user
+  ) async {
+    if(user == null) return null;
+    var ret = await _getOrSetData<Map<String, dynamic>>("!/cockpit/saveUser")(
+      save : {
+        "user": user,
+      });
+    return ret.isNotEmpty ? ret.first : null;
+  }
+  static Future<List<Map<String, dynamic>>> listUsers(
+    Map<String, dynamic>? filter
+  ) async {
+    var ret = await _getOrSetData<Map<String, dynamic>>("!/cockpit/listUsers")(
+      save : {
+        "filter": filter,
+      });
+    return ret;
+  }
+  static Future<Map<String, dynamic>?> assets(
+    Map<String, dynamic>? filter
+  ) async {
+    if(filter == null) return null;
+    var ret = await _getOrSetData<Map<String, dynamic>>("!/cockpit/assets")(
+      save : {
+        "filter": filter,
+      });
+    return ret.isNotEmpty ? ret.first : null;
+  }
+  static Future<String> image(String src,{
+    int?    width,
+    int?    height,
+    int?    quality,
+    bool?   domain,
+    bool?   o,
+    bool?   base64,
+    Map<CockpitImageFilter,int> filter = const <CockpitImageFilter,int>{},
+    CockpitImageMode mode = CockpitImageMode.thumbnail
+  }) async {
+    var ret = await _getOrSetData<String>("!/cockpit/assets", returnText: true)(
+      save : {
+        src : src,
+        "f":  filter.map((key, value) => MapEntry(_cockpitImageFilter[key]!, "$value")) ,
+        "m":  _cockpitImageMode[mode],
+        ...(width != null ? {"w":   width } : {}),
+        ...(height != null ? {"h":  height } : {}),
+        ...(quality != null ? {"q": quality } : {}),
+        ...(domain != null ? {"d":  domain } : {}),
+        ...(base64 != null ? {"b64":  base64 } : {}),
+        ...(o != null ? {"o":  o } : {}),
+      });
+    return ret.isNotEmpty ? ret.first : "";
+  }
+  // Singletons
+  static Future<List<Map<String, dynamic>>> listSingletons() async {
+    var ret = await _getOrSetData<Map<String, dynamic>>("!/singletons/listSingletons")();
+    return ret;
+  }
+  // Collections
+  static Future<List<Map<String, dynamic>>> listCollections() async {
+    var ret = await _getOrSetData<Map<String, dynamic>>("!/collections/listCollections")();
+    return ret;
+  }  
 }
+
+enum CockpitImageMode{
+  thumbnail,
+  bestFit,
+  resize,
+  fitToWidth,
+  fitToHeight,
+}
+
+enum CockpitImageFilter{
+  blur,
+  brighten,
+  colorize,
+  contrast,
+  darken,
+  desaturate,
+  edgeDetect,
+  emboss,
+  flip,
+  invert,
+  opacity,
+  pixelate,
+  sepia,
+  sharpen,
+  sketch,
+}
+Map<CockpitImageMode, String> _cockpitImageMode = {
+  CockpitImageMode.thumbnail : "thumbnail",
+  CockpitImageMode.bestFit : "bestFit",
+  CockpitImageMode.resize : "resize",
+  CockpitImageMode.fitToWidth : "fitToWidth",
+  CockpitImageMode.fitToHeight : "fitToHeight",
+};
+
+Map<CockpitImageFilter, String> _cockpitImageFilter = {
+  CockpitImageFilter.blur : "blur",
+  CockpitImageFilter.brighten : "brighten",
+  CockpitImageFilter.colorize : "colorize",
+  CockpitImageFilter.contrast : "contrast",
+  CockpitImageFilter.darken : "darken",
+  CockpitImageFilter.desaturate : "desaturate",
+  CockpitImageFilter.edgeDetect : "edge detect",
+  CockpitImageFilter.emboss : "emboss",
+  CockpitImageFilter.flip : "flip",
+  CockpitImageFilter.invert : "invert",
+  CockpitImageFilter.opacity : "opacity",
+  CockpitImageFilter.pixelate : "pixelate",
+  CockpitImageFilter.sepia : "sepia",
+  CockpitImageFilter.sharpen : "sharpen",
+  CockpitImageFilter.sketch : "sketch",
+};

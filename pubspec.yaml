@@ -1,6 +1,6 @@
 name: cockpit_client
 description: Consume Cockpit PHP API within Flutter CLIENT, access to your collection, singleton or save your forms.
-version: 1.0.6
+version: 1.0.7
 
 # author: Ulrich Badinga
 homepage: https://github.com/lynn-eRP/cockpit_client

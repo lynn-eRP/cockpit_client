@@ -193,9 +193,9 @@ List<Map<String, dynamic>> results = await Cockpit("api_access").find(
 
 ### Read undeclared endpoint
 
-`
+
 To read an undelared endpoint you can just pass the name and use a prefix to specify the type (form, singleton,collection or custom url)
-`
+
 
 | Prefix | Type               | Usage                                                         |
 |--------|--------------------|---------------------------------------------------------------|
@@ -228,4 +228,68 @@ Map<String, dynamic> data = await Cockpit("!/addons/save/gps").get(
     alt : 15,
   },
 );
+```
+
+## Cockpit urls
+
+
+### Authenticate user
+
+```dart
+Cockpit.authUser('username','xxpasswordxx')
+```
+
+### Create / Update user
+
+```dart
+Cockpit.saveUser({...}) // user data (user, name, email, active, group)
+```
+
+### Get users.
+
+```dart
+Cockpit.listUsers([Map<String, dynamic> filter]) // (optional) you can pass filter
+```
+
+### Get assets
+
+```dart
+Cockpit.assets([Map<String, dynamic> filter]) // (optional) you can pass filter
+```
+
+### Get thumbnail url
+
+```dart
+Cockpit.image(imagePath, 
+  width : width,
+  height : height,
+  quality : quality,
+  domain : domain,
+  o : o,
+  base64 : base64,
+);
+```
+
+### Get all singletons
+
+```javascript
+Cockpit.listSingletons()
+```
+
+### Get all collections
+
+```javascript
+Cockpit.listCollections();
+```
+
+### Get collection schema
+
+```javascript
+Cockpit("collectionname").schema();
+```
+
+### Update collection schema
+
+```javascript
+Cockpit("collectionname").updateSchema(fields); // fields is List<Map<String,dynamic>>
 ```
