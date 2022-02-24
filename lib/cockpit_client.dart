@@ -12,7 +12,7 @@ import 'package:liquid_engine/liquid_engine.dart';
 final fetch = http.Client();
 Map<String, String> _cache = {};
 Map<String, Timer> _cacheTTL = {};
-Map<String, dynamic> _config;
+Map<String, dynamic> _config = {};
 dynamic _templateEngine(String tmpl, Map<String, dynamic> data) {
   Context context = Context.create();
   context.variables.addAll(data);
@@ -21,41 +21,36 @@ dynamic _templateEngine(String tmpl, Map<String, dynamic> data) {
 }
 
 Future<List<T>> Function({
-  int limit,
-  int page,
-  String id,
   dynamic fields,
-  bool populate,
-  Map<String, dynamic> filter,
-  bool ignoreDefaultFilter,
-  Map<String, dynamic> save,
-  Duration cache,
+  int? page,
+  String? id,
+  int? limit,
+  bool? populate,
+  Map<String, dynamic>? filter,
+  bool? ignoreDefaultFilter,
+  Map<String, dynamic>? save,
+  Duration? cache,
 }) _getOrSetData<T>(
   String prop, {
-  bool isSingleton,
-  bool isForm,
-  bool isApi,
-  bool notConfigured,
+  bool? isSingleton,
+  bool? isForm,
+  bool? isApi,
+  bool? notConfigured,
 }) {
   return ({
     page,
     id,
     fields,
-    filter,
     save,
+    filter,
     cache,
-    ignoreDefaultFilter = false,
-    limit = 10,
-    populate = true,
+    ignoreDefaultFilter,
+    limit,
+    populate,
   }) async {
-    limit = limit ?? 10;
-    populate = populate ?? true;
-    save = save ?? null;
-    cache = cache ?? Duration(hours: 1);
-    ignoreDefaultFilter = ignoreDefaultFilter ?? false;
-    if (_config == null) throw "config is not defined";
+    if (_config.isEmpty) throw "config is not defined";
     final Map<String, dynamic> obj = _config["api"];
-    Map<String, dynamic> params;
+    Map<String, dynamic> params = {};
     final Map<String, dynamic> api = {};
 
     if ((notConfigured ?? false)) {
@@ -132,7 +127,7 @@ Future<List<T>> Function({
             : (page != null ? ((page + 1) * (limit ?? api["limit"])) : 0),
         "sort": id != null ? null : (api["sort"] ?? {"_created": -1}),
         "simple": 1,
-        "populate": _populate != null && _populate ? 1 : 0,
+        "populate": _populate ? 1 : 0,
         "fields": fields ?? {},
         "filter": tmp
       };
@@ -146,11 +141,11 @@ Future<List<T>> Function({
         api["isForm"] != null && api["isForm"] is bool && api["isForm"] == true;
     isApi = isApi ??
         api["isApi"] != null && api["isApi"] is bool && api["isApi"] == true;
-    if (isForm)
+    if (isForm!)
       collectionName = api["form"] ?? api["url"];
-    else if (isSingleton)
+    else if (isSingleton!)
       collectionName = api["singleton"] ?? api["url"];
-    else if (isApi)
+    else if (isApi!)
       collectionName = api["api"] ?? api["url"];
     else
       collectionName = api["collection"] ?? api["url"];
@@ -158,15 +153,15 @@ Future<List<T>> Function({
     var url = (api["server"] ?? _config["server"]) +
         (api["baseUrl"] ?? _config["baseUrl"] ?? "") +
         "/api/";
-    if (!isApi) {
+    if (!isApi!) {
       if (save != null)
-        url += (isForm ? 'forms/submit/' : 'collections/save/');
+        url += (isForm! ? 'forms/submit/' : 'collections/save/');
       else
-        url += (isSingleton ? 'singletons' : 'collections') + '/get/';
+        url += (isSingleton! ? 'singletons' : 'collections') + '/get/';
     }
     url += collectionName;
     url += "?token=${api["token"] ?? _config["token"]}";
-    T map(Map<String, dynamic> el) {
+    T map(Map<String, dynamic>? el) {
       if (el != null) {
         Map<String, dynamic> map = api["map"] ?? {};
         map.forEach((e, value) {
@@ -181,15 +176,15 @@ Future<List<T>> Function({
     }
 
     // print("URL $url");
-    var body = isSingleton
+    var body = isSingleton!
         ? null
         : (save != null)
-            ? jsonEncode({"${isForm ? 'form' : 'data'}": save})
+            ? jsonEncode({"${isForm! ? 'form' : 'data'}": save})
             : jsonEncode(params);
     // print("BODY $body");
     response() => fetch.post(
           url,
-          headers: isSingleton ? null : {'Content-Type': 'application/json'},
+          headers: isSingleton! ? null : {'Content-Type': 'application/json'},
           body: body,
         );
 
@@ -206,7 +201,7 @@ Future<List<T>> Function({
         });
       }
 
-      resBody = _cache[cacheUrl];
+      resBody = _cache[cacheUrl]!;
     } else {
       resBody = (await response()).body;
     }
@@ -220,9 +215,9 @@ Future<List<T>> Function({
         res["error"] != null &&
         res["error"] == true &&
         res.containsKey("message")) throw res["message"];
-    res = ((isSingleton || save != null) ? [res] : res)
-        as List; //<Map<String, dynamic>>;
-    res = (res as List)?.map((value) => map(value))?.toList();
+    res = ((isSingleton! || save != null) ? [res] : res); //<Map<String, dynamic>>;
+    if(res != null && res is List)
+      res = res.map((value) => map(value)).toList();
     return res ?? [];
   };
 }
@@ -250,7 +245,7 @@ class Cockpit {
   // static API collection(String collection) => ;
   static init(Map<String, dynamic> config) {
     //  console.log(config);
-    Map<String, bool Function(String)> tmp = {
+    Map<String, bool Function(dynamic)> tmp = {
       "server": (s) => s is String,
       "baseUrl": (s) => s is String,
       "token": (s) => s is String,
@@ -280,26 +275,26 @@ class Cockpit {
   }
 
   final Future<List<Map<String, dynamic>>> Function({
-    int limit,
-    int page,
-    String id,
     dynamic fields,
-    bool populate,
-    bool ignoreDefaultFilter,
-    Map<String, dynamic> filter,
-    Map<String, dynamic> save,
-    Duration cache,
+    int? limit,
+    int? page,
+    String? id,
+    bool? populate,
+    bool? ignoreDefaultFilter,
+    Map<String, dynamic>? filter,
+    Map<String, dynamic>? save,
+    Duration? cache,
   }) _collection;
   Cockpit(String collection)
       : _collection = _getOrSetData<Map<String, dynamic>>(collection);
   Future<List<Map<String, dynamic>>> find({
-    int limit,
-    int page,
-    bool ignoreDefaultFilter,
     dynamic fields,
-    bool populate,
-    Map<String, dynamic> filter,
-    Duration cache,
+    int? limit,
+    int? page,
+    bool ?ignoreDefaultFilter = false,
+    bool? populate,
+    Map<String, dynamic>? filter,
+    Duration? cache,
   }) =>
       _collection(
         limit: limit,
@@ -310,12 +305,12 @@ class Cockpit {
         filter: filter,
         cache: cache,
       );
-  Future<Map<String, dynamic>> findOne({
+  Future<Map<String, dynamic>?> findOne({
     dynamic fields,
-    bool ignoreDefaultFilter,
-    bool populate,
-    Map<String, dynamic> filter,
-    Duration cache,
+    bool? ignoreDefaultFilter,
+    bool? populate,
+    Map<String, dynamic>? filter,
+    Duration? cache,
   }) async {
     var ret = (await find(
       limit: 1,
@@ -325,15 +320,14 @@ class Cockpit {
       filter: filter,
       cache: cache,
     ));
-    ret = ret.isEmpty ? null : ret;
-    return ret?.elementAt(0)?.map((key, value) => MapEntry("$key", value));
+    return (ret.isEmpty ? null : ret)?.first.map((key, value) => MapEntry("$key", value));
   }
 
-  Future<Map<String, dynamic>> get({
-    @required String id,
+  Future<Map<String, dynamic>?> get({
+    required String id,
     dynamic fields,
-    bool populate,
-    Duration cache,
+    bool? populate,
+    Duration? cache,
   }) async {
     var ret = (await _collection(
       id: id,
@@ -341,17 +335,15 @@ class Cockpit {
       populate: populate ?? true,
       cache: cache,
     ));
-    ret = ret.isEmpty ? null : ret;
-    return ret?.elementAt(0);
+    return (ret.isEmpty ? null : ret)?.first;
   }
 
-  Future<Map<String, dynamic>> save({
-    @required Map<String, dynamic> data,
+  Future<Map<String, dynamic>?> save({
+    required Map<String, dynamic> data,
   }) async {
     var ret = (await _collection(
       save: data,
     ));
-    ret = ret.isEmpty ? null : ret;
-    return ret?.elementAt(0);
+    return (ret.isEmpty ? null : ret)?.elementAt(0);
   }
 }
