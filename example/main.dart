@@ -1,12 +1,11 @@
-import 'package:cockpit_client/cockpit_client.old.dart';
+import 'package:cockpit_client/cockpit_client.dart';
 
 main() async {
 // Init cockpit client
-  Cockpit.init({
-    "server": "http://192.168.2.1",
-    "baseUrl": "/",
-    "token": "58e20fae9f86dc1a493d11bc5d6a18",
-    "filter": {
+  Cockpit.init(
+    server: Uri.parse("http://192.168.2.1"),
+    token: "58e20fae9f86dc1a493d11bc5d6a18",
+    defaultFilter: {
       //Global filter
       r"$or": [
         {"delete": false},
@@ -15,9 +14,9 @@ main() async {
         }
       ]
     },
-    "api": {
+    api: {
       // Collections
-      "myCollection": {
+      "users": {
         "collection": "users",
         "sort": {"login": 1},
         "fields": ["nom", "prenom", "parent", "login", "enabled", "_create_by"]
@@ -48,9 +47,9 @@ main() async {
         },
       },
     }
-  });
+  );
 
-  print(await Cockpit("api_access").find(
+  print(await Cockpit("users").find(
     cache: Duration(hours: 1), // [optional] cache result
   ));
 }

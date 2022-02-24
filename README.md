@@ -185,3 +185,16 @@ Map<String, dynamic> data = await Cockpit("api_access").save(
   },
 );
 ```
+
+### post to a Custom Url
+
+```dart
+// post data to a custom cockpit url
+Map<String, dynamic> data = await Cockpit("!/addons/save/gps").get(
+  data : {
+    lat : -19.016682,
+    long : 26.806641,
+    alt : 15,
+  },
+);
+```
