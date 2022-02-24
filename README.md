@@ -1,6 +1,37 @@
-# cockpit_client
+# Client for cockpit CMS
 
-REST API client for cockpit
+A http-client for your Cockpit CMS content.
+
+## How Install
+
+### Flutter:
+
+```bash
+$ flutter pub add cockpit_client
+```
+
+### Pubspec.yaml
+
+Add a line like this to your package's pubspec.yaml 
+
+```yaml
+dependencies:
+  cockpit_client: ^1.0.6-b
+```
+
+And run if your editor don't support flutter
+
+```bash
+flutter pub get
+```
+
+### And import it
+
+Now in your Dart code, add
+
+```dart
+import 'package:cockpit_client/cockpit_client.dart';
+```
 
 ## How Initialize
 ---
