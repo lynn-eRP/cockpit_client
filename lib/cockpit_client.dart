@@ -8,8 +8,11 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:liquid_engine/liquid_engine.dart';
+import 'package:hash/hash.dart';
+import 'package:dbcrypt/dbcrypt.dart';
 
-final fetch = http.Client();
+
+Map<Key, http.Client> _fetch = {};
 Map<String, String> _cache = {};
 Map<String, Timer> _cacheTTL = {};
 Map<String, dynamic> _config = {};
@@ -20,11 +23,19 @@ dynamic _templateEngine(String tmpl, Map<String, dynamic> data) {
   return template.render(context);
 }
 
+_closeFetch(Key collectionName) {
+  if (_fetch.containsKey(collectionName)) {
+    debugPrint("Close last request $collectionName");
+    _fetch[collectionName]!.close();
+    _fetch.remove(collectionName);
+  }
+}
+
 Future<List<T>> Function({
-  dynamic fields,
+  int? limit,
   int? page,
   String? id,
-  int? limit,
+  dynamic fields,
   bool? populate,
   Map<String, dynamic>? filter,
   bool? ignoreDefaultFilter,
@@ -36,28 +47,42 @@ Future<List<T>> Function({
   bool? isForm,
   bool? isApi,
   bool? notConfigured,
+  Key? key,
 }) {
   return ({
     page,
     id,
     fields,
-    save,
     filter,
+    save,
     cache,
-    ignoreDefaultFilter,
-    limit,
-    populate,
+    ignoreDefaultFilter = false,
+    limit = 10,
+    populate = true,
   }) async {
-    if (_config.isEmpty) throw "config is not defined";
+    // limit = limit ?? 10;
+    // populate = populate ?? true;
+    // save = save ?? null;
+    // cache = cache ?? Duration(hours: 1);
+    // ignoreDefaultFilter = ignoreDefaultFilter ?? false;
+    if (!Cockpit.isConfigured) throw "config is not defined";
     final Map<String, dynamic> obj = _config["api"];
     Map<String, dynamic> params = {};
     final Map<String, dynamic> api = {};
 
-    if ((notConfigured ?? false)) {
-      api["url"] = prop;
-    } else if (!obj.containsKey(prop))
-      return [];
-    else {
+    if (!obj.containsKey(prop)){
+      if(RegExp(r"^(@|#|\*|!)").hasMatch(prop)){
+        api[({
+          "@" : "singleton",
+          "#" : "form",
+          "*" : "collection",
+          "!" : "api"
+        })[prop[0]]!] = prop.substring(1);
+      }else{
+        api["collection"] = prop;
+      }
+    }else{
+      // populate api
       (obj[prop] as Map<String, dynamic>).forEach((key, value) {
         api[key] = value;
       });
@@ -118,7 +143,6 @@ Future<List<T>> Function({
         };
         if (tmp[r"$and"].length == 1) tmp = tmp[r"$and"][0];
       }
-      // print("FILTRE ${jsonEncode(tmp)}");
       bool _populate = (populate ?? api["populate"] ?? true);
       params = {
         "limit": id != null ? null : (limit ?? api["limit"] ?? 10),
@@ -153,7 +177,7 @@ Future<List<T>> Function({
     var url = (api["server"] ?? _config["server"]) +
         (api["baseUrl"] ?? _config["baseUrl"] ?? "") +
         "/api/";
-    if (!isApi!) {
+    if (!(isApi!)) {
       if (save != null)
         url += (isForm! ? 'forms/submit/' : 'collections/save/');
       else
@@ -174,39 +198,52 @@ Future<List<T>> Function({
       }
       return el as T;
     }
+    // print("URL $url $api");
 
-    // print("URL $url");
+
+    Key _key = key ?? Key(collectionName);
+    _closeFetch(_key);
+    _fetch[_key] = http.Client();
+
     var body = isSingleton!
         ? null
         : (save != null)
             ? jsonEncode({"${isForm! ? 'form' : 'data'}": save})
             : jsonEncode(params);
     // print("BODY $body");
-    response() => fetch.post(
-          url,
+    response() => _fetch[_key]!.post(
+          Uri.parse(url),
           headers: isSingleton! ? null : {'Content-Type': 'application/json'},
           body: body,
         );
-
     var resBody = "";
-    if (cache != null) {
-      // check cache
-      String cacheUrl = "$url :: $body";
-      if (!_cache.containsKey(cacheUrl)) {
-        _cache[cacheUrl] = (await response()).body;
-        _cacheTTL[cacheUrl] = Timer(cache, () {
-          // clear Cache
-          _cache.remove(cacheUrl);
-          _cacheTTL.remove(cacheUrl);
-        });
+    var res;
+    try {
+      if (cache != null) {
+        // check cache
+        String cacheUrl = String.fromCharCodes(
+            MD5().update("$url :: ${body ?? ''}".codeUnits).digest());
+        // print("cacheUrl $cacheUrl");
+        if (!_cache.containsKey(cacheUrl)) {
+          resBody = (await response()).body;
+          res = await compute(_decodeString, resBody);
+          _cache[cacheUrl] = resBody;
+          _cacheTTL[cacheUrl] = Timer(cache, () {
+            // clear Cache
+            _cache.remove(cacheUrl);
+            _cacheTTL.remove(cacheUrl);
+          });
+        } else
+          resBody = _cache[cacheUrl]!;
+      } else {
+        resBody = (await response()).body;
+        res = await compute(_decodeString, resBody);
       }
-
-      resBody = _cache[cacheUrl]!;
-    } else {
-      resBody = (await response()).body;
+      // print("resBody $resBody");
+    } finally {
+      _closeFetch(_key);
     }
 
-    var res = await decodeJSON(resBody);
     if (res is Map && res.length == 1 && res.containsKey("error"))
       throw res["error"];
     if (res is Map &&
@@ -216,13 +253,14 @@ Future<List<T>> Function({
         res["error"] == true &&
         res.containsKey("message")) throw res["message"];
     res = ((isSingleton! || save != null) ? [res] : res); //<Map<String, dynamic>>;
-    if(res != null && res is List)
-      res = res.map((value) => map(value)).toList();
-    return res ?? [];
+    if(res is List)
+      res = res.map((value) => map(value)).toList().whereType<T>().toList();
+    
+    return res is List ? (res as List<T>) : [];
   };
 }
 
-decodeString(String json) async {
+_decodeString(String json) async {
   dynamic res;
   try {
     res = jsonDecode(json);
@@ -233,45 +271,47 @@ decodeString(String json) async {
   return res;
 }
 
-decodeJSON(String json) async {
-  return compute(decodeString, json);
-}
-
 class Cockpit {
+  final String collection;
+  final key;
   noSuchMethod(Invocation invocation) {
-    print(invocation);
+    debugPrint("noSuchMethod#${invocation.memberName.toString()}");
   }
-
+  static String hash(String plainPassword){
+    return  DBCrypt().hashpw(plainPassword, new DBCrypt().gensaltWithRounds(10)).replaceFirst(RegExp(r"^\$.{2}\$"), r"$2y$");
+  }
+  static bool get isConfigured => _config.keys.isNotEmpty;
   // static API collection(String collection) => ;
-  static init(Map<String, dynamic> config) {
-    //  console.log(config);
-    Map<String, bool Function(dynamic)> tmp = {
-      "server": (s) => s is String,
-      "baseUrl": (s) => s is String,
-      "token": (s) => s is String,
-      "api": (s) =>
-          [
-            'Map<String, Object>',
-            'Map<String, dynamic>',
-            '_InternalLinkedHashMap<String, Map<String, Object>>',
-            '_InternalLinkedHashMap<String, Map<String, dynamic>>',
-            '_InternalLinkedHashMap<String, Object>',
-            '_InternalLinkedHashMap<String, dynamic>'
-          ].indexOf(s.runtimeType.toString()) ==
-          -1
+  static init({
+    // cockpit host (url)
+    required Uri server,
+    required String token,
+    Map<String, dynamic>? defaultFilter,
+    Map<String, dynamic> api = const {}
+  }) {
+    var baseUrl = server.path;
+    server = server.replace(path: "", query: "");
+    Map<String, dynamic> config = {
+      "api" : api,
+      "server" : server.toString(),
+      "token" : token,
+      "baseUrl" : baseUrl,
+      "filter" : defaultFilter
     };
-    tmp.forEach((e, val) => {
-          if (config[e] == null || !val(config[e].runtimeType.toString()))
-            throw "$e is bad type ${config[e].runtimeType}"
-        });
-    // console.log("set config", config);
+
+    if(config["api"] ==  null)
+      config["api"] = <String,dynamic>{};
+    if(config["baseUrl"] ==  null)
+      config["baseUrl"] = "";
     _config = config;
-    if (_config["baseUrl"].endsWith("/"))
+    if ((_config["baseUrl"] as String).endsWith("/"))
       _config["baseUrl"] =
-          _config["baseUrl"].substr(0, _config["baseUrl"].length - 1);
+          _config["baseUrl"].substring(0, _config["baseUrl"].length - 1);
+    _config["baseUrl"] =
+        ("/"+_config["baseUrl"]).replaceAll(RegExp(r"/+"), "/");
     if (_config["server"].endsWith("/"))
       _config["server"] =
-          _config["server"].substr(0, _config["server"].length - 1);
+          _config["server"].substring(0, _config["server"].length - 1);
   }
 
   final Future<List<Map<String, dynamic>>> Function({
@@ -285,13 +325,15 @@ class Cockpit {
     Map<String, dynamic>? save,
     Duration? cache,
   }) _collection;
-  Cockpit(String collection)
-      : _collection = _getOrSetData<Map<String, dynamic>>(collection);
+  Cockpit(
+    this.collection, {
+    this.key,
+  }) : _collection = _getOrSetData<Map<String, dynamic>>(collection, key: key);
   Future<List<Map<String, dynamic>>> find({
     dynamic fields,
     int? limit,
     int? page,
-    bool ?ignoreDefaultFilter = false,
+    bool? ignoreDefaultFilter,
     bool? populate,
     Map<String, dynamic>? filter,
     Duration? cache,
@@ -334,8 +376,9 @@ class Cockpit {
       fields: fields,
       populate: populate ?? true,
       cache: cache,
+      limit: 1,
     ));
-    return (ret.isEmpty ? null : ret)?.first;
+    return (ret.isEmpty ? null : ret)?.first.map((key, value) => MapEntry("$key", value));
   }
 
   Future<Map<String, dynamic>?> save({
@@ -344,6 +387,10 @@ class Cockpit {
     var ret = (await _collection(
       save: data,
     ));
-    return (ret.isEmpty ? null : ret)?.elementAt(0);
+    return (ret.isEmpty ? null : ret)?.first;
+  }
+
+  void cancelLastRequest() {
+    _closeFetch(key ?? Key(collection));
   }
 }

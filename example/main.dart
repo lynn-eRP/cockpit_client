@@ -1,4 +1,4 @@
-import 'package:cockpit_client/cockpit_client.dart';
+import 'package:cockpit_client/cockpit_client.old.dart';
 
 main() async {
 // Init cockpit client
