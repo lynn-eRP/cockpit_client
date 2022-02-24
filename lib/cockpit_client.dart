@@ -1,6 +1,4 @@
 library cockpit_client;
-// dependencies:
-//   http: ^0.12.1
 
 // Cockpit REST Client
 import 'dart:async';
