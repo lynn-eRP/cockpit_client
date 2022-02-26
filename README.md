@@ -3,7 +3,6 @@
 
 A http-client for your Cockpit CMS content.
 
-----------------------
 
 [![Version](https://img.shields.io/pub/v/cockpit_client.svg?color=8e44ad&logo=flutter)](https://pub.dev/packages/cockpit_client) ![GitHub license](https://img.shields.io/badge/license-MIT-white.svg?style=flat&style=for-the-badge&logo=github)  ![By lynn](https://img.shields.io/badge/aut-Lynn-d35400.svg?label=Author&style=flat&style=for-the-badge&logo=open-collective&labelColor=2980b9)
 
